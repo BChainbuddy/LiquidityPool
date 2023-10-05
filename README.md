@@ -4,8 +4,8 @@ This is a liquidity pool made by me. It has a lot of functionalities. The owner 
 
 ## This project is made with hardhat. The deploy command is:
 
-yarn hardhat deploy
-This command deploys both the custom token and the liquidity pool.
+
+yarn hardhat deploy (This command deploys both the custom token and the liquidity pool)
 
 ## To deploy only token:
 
