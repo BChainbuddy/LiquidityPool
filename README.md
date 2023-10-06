@@ -1,8 +1,5 @@
 # Liquidity Pool
 
-```markdown
-# Liquidity Pool
-
 This is a liquidity pool made by me. It has a lot of functionalities. The owner can set whatever tokens they want to include in the pool. The users can then exchange tokens in the liquidity pool. The users also get permission to add liquidity tokens. The tokens represent how much of a liquidity pool a certain user owns. The yield is then distributed to the liquidity providers, and they can withdraw tokens daily. The owner needs to lock the initial liquidity for 365 days so the liquidity pool stays secure for one year.
 
 ## Technologies Used
@@ -10,7 +7,6 @@ This is a liquidity pool made by me. It has a lot of functionalities. The owner 
 -   Hardhat
 -   JavaScript
 -   Solidity
-```
 
 ## Deployment
 
@@ -32,10 +28,6 @@ To deploy only the liquidity pool (change the token addresses in 02-deploy-Liqui
 yarn hardhat deploy --tags liquiditypool
 ```
 
-````markdown
-## Contribution
-
-```markdown
 ## Contribution
 
 We welcome contributions from the community. If you'd like to contribute, please follow these guidelines:
@@ -47,8 +39,6 @@ We welcome contributions from the community. If you'd like to contribute, please
 5. Submit a pull request.
 
 Please make sure to update tests as appropriate and adhere to the code of conduct.
-```
-````
 
 ## License
 
