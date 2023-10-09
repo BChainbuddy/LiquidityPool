@@ -8,8 +8,9 @@ error assetNotCorrect();
 error notEnoughTokens();
 error notEnoughGas();
 error notEnoughTimePassed();
+error initialLiquidityAlreadyProvided();
 
-contract liquidityPool {
+contract LiquidityPool {
     event priceChanged(address _asset, uint256 price);
 
     // ADDRESSES OF THE PROVIDED TOKENS
@@ -27,40 +28,48 @@ contract liquidityPool {
     uint256 public swapFee;
     address public owner;
 
-    constructor(
-        address _assetOneAddress,
-        address _assetTwoAddress,
-        uint256 _assetOne,
-        uint256 _assetTwo
-    ) {
+    constructor(address _assetOneAddress, address _assetTwoAddress) {
         // STORE THE ADDRESSES
         assetOneAddress = _assetOneAddress;
         assetTwoAddress = _assetTwoAddress;
 
-        // SENDS THE TOKENS TO THE LIQUIDITY POOL
-        IERC20(assetOneAddress).approve(msg.sender, _assetOne);
-        IERC20(assetTwoAddress).approve(msg.sender, _assetTwo);
-        IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _assetOne);
-        IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _assetTwo);
-
         // SET THE OWNER
         owner = msg.sender;
 
-        // SET INITIAL SWAP FEE
+        // SET INITIAL SWAP FEE IN PERCENT
         swapFee = 1;
+    }
+
+    // TRACK THE LP TOKEN QUANTITY, INITIAL LIQUIDITY
+    mapping(address => uint256) public lpTokenQuantity;
+
+    // ADD INITIAL LIQUIDITY
+    function addInitialLiquidity(
+        uint256 _assetOneAmount,
+        uint256 _assetTwoAmount
+    ) public onlyOwner {
+        if (initialLiquidityProvidedTime[msg.sender] > 0) {
+            revert initialLiquidityAlreadyProvided();
+        }
+        initialLiquidityProvidedTime[msg.sender] = block.timestamp;
+
+        // SENDS THE TOKENS TO THE LIQUIDITY POOL
+        // IERC20(assetOneAddress).approve(msg.sender, _assetOne);
+        // IERC20(assetTwoAddress).approve(msg.sender, _assetTwo);
+        // IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _assetOne);
+        // IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _assetTwo);
+        IERC20(assetOneAddress).transfer(address(this), _assetOneAmount);
+        IERC20(assetTwoAddress).transfer(address(this), _assetTwoAmount);
 
         // SET THE INITIAL LIQUIDITY
-        assetOne = _assetOne;
-        assetTwo = _assetTwo;
+        assetOne = _assetOneAmount;
+        assetTwo = _assetTwoAmount;
         initialLiquidity = assetTwo * assetOne;
         liquidity = assetTwo * assetOne;
 
         // GIVE LP TOKENS TO THE INITIAL LIQUIDITY PROVIDER
         lpTokenQuantity[msg.sender] = initialLiquidity;
     }
-
-    // TRACK THE LP TOKEN QUANTITY, INITIAL LIQUIDITY
-    mapping(address => uint256) public lpTokenQuantity;
 
     // ADD ADDITIONAL LIQUIDITY, give first and second token address, give the _amount of first asset you have, the function calculates the other side
     function addLiquidity(address _asset, address _secondAsset, uint256 _amount) public {
@@ -221,7 +230,7 @@ contract liquidityPool {
         if (availableYield > address(this).balance) {
             revert notEnoughTokens(); // IN CASE THERE IS A LOT OF PEOPLE JOING AT ONCE AND RATIOS GET CHANGED TOO MUCH
         }
-        lastYieldFarmed[msg.sender] = block.timestamp;
+        lastYieldFarmedTime[msg.sender] = block.timestamp;
         yieldTaken[msg.sender] += availableYield;
         payable(msg.sender).transfer(availableYield);
     }
@@ -238,14 +247,14 @@ contract liquidityPool {
     }
 
     // TIMESTAMP MAPPING
-    mapping(address => uint256) public lastYieldFarmed;
-    mapping(address => uint256) public initialLiquidityProvided;
+    mapping(address => uint256) public lastYieldFarmedTime;
+    mapping(address => uint256) public initialLiquidityProvidedTime;
 
     // DAILY TIME CHECKER
     function isTime() public view returns (bool) {
-        lastYieldFarmed[msg.sender];
+        lastYieldFarmedTime[msg.sender];
         uint256 currentStamp = block.timestamp;
-        if ((lastYieldFarmed[msg.sender] + 1 days) < currentStamp) {
+        if ((lastYieldFarmedTime[msg.sender] + 1 days) < currentStamp) {
             return true;
         } else {
             return false;
@@ -254,9 +263,9 @@ contract liquidityPool {
 
     // INITIAL LIQUIDITY TIME CHECKER, the owner can't withdraw initial liquidity for 365 days
     function isTimeInitialLiquidity() public view returns (bool) {
-        initialLiquidityProvided[msg.sender];
+        initialLiquidityProvidedTime[msg.sender];
         uint256 currentStamp = block.timestamp;
-        if ((initialLiquidityProvided[msg.sender] + 365 days) < currentStamp) {
+        if ((initialLiquidityProvidedTime[msg.sender] + 365 days) < currentStamp) {
             return true;
         } else {
             return false;

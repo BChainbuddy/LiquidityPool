@@ -1,17 +1,19 @@
-const { developmentChains } = require("../helper-hardhat-config")
-const { network, getNamedAccounts, deployments } = require("hardhat")
+const { developmentChains, networkConfig } = require("../helper-hardhat-config")
+const { network, getNamedAccounts, deployments, getChainId } = require("hardhat")
 const { verify } = require("../utils/verify")
 
 module.exports = async () => {
     const { deployer } = await getNamedAccounts()
     const { deploy, log } = deployments
 
-    log("Getting the addresses of tokens and buying them...")
-    //GET THE TOKENS AND ADDRESS(USDC, SIMPLETOKEN, AMOUNTUSDC, AMOUNT SIMPLETOKEN)
+    log("Getting the addresses of tokens...")
+    //GET THE TOKENS AND ADDRESSES
     const simpleToken = await ethers.getContract("SimpleToken", deployer)
+    const sampleToken = await ethers.getContract("SampleToken", deployer)
     const simpleTokenAddress = simpleToken.target
-    const usdcAddress = "0x746d7b1dfcD1Cc2f4b7d09F3F1B9A21764FBeB33" //SEPOLIA
-    //GET THE USDC TOKEN
+    const sampleTokenAddress = sampleToken.target
+
+    args = [simpleTokenAddress, sampleTokenAddress]
 
     const blockConfirmations = developmentChains.includes(network.name) ? 0 : 6
     log("Deploying...")
@@ -23,8 +25,10 @@ module.exports = async () => {
     })
     log("Deployed!!!")
 
-    log("Verifying...")
     if (process.env.ETHERSCAN_API_KEY && !developmentChains.includes(network.name)) {
+        log("Verifying...")
         await verify(liquidityPool.target, args)
     }
 }
+
+module.exports.tags = ["all", "liquidityPool", "pool"]

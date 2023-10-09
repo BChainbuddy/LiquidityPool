@@ -9,7 +9,7 @@ module.exports = async () => {
     const blockConfirmations = developmentChains.includes(network.name) ? 0 : 6
 
     log(`Deploying to ${network.name} ...`)
-    const simpleToken = await deploy("SimpleToken", {
+    const sampleToken = await deploy("SampleToken", {
         log: true,
         from: deployer,
         waitConfirmations: blockConfirmations,
@@ -19,8 +19,8 @@ module.exports = async () => {
 
     if (process.env.ETHERSCAN_API_KEY && !developmentChains.includes(network.name)) {
         log("Verifying...")
-        await verify(simpleToken.target, args)
+        await verify(sampleToken.target, args)
     }
 }
 
-module.exports.tags = ["all", "token", "simpleToken"]
+module.exports.tags = ["all", "token", "sampleToken"]

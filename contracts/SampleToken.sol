@@ -5,8 +5,8 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract SimpleToken is ERC20, Ownable {
-    constructor() ERC20("SimpleToken", "SIMPL") {
+contract SampleToken is ERC20, Ownable {
+    constructor() ERC20("SampleToken", "SAMPL") {
         _mint(msg.sender, 1000 * 10 ** 18);
     }
 
