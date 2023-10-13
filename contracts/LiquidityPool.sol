@@ -9,6 +9,7 @@ error notEnoughTokens();
 error notEnoughGas();
 error notEnoughTimePassed();
 error initialLiquidityAlreadyProvided();
+error addressNotCorrect();
 
 contract LiquidityPool {
     event priceChanged(address _asset, uint256 price);
@@ -43,7 +44,7 @@ contract LiquidityPool {
     // TRACK THE LP TOKEN QUANTITY, INITIAL LIQUIDITY
     mapping(address => uint256) public lpTokenQuantity;
 
-    // ADD INITIAL LIQUIDITY
+    // ADD INITIAL LIQUIDITY, needs erc20 approval
     function addInitialLiquidity(
         uint256 _assetOneAmount,
         uint256 _assetTwoAmount
@@ -54,12 +55,8 @@ contract LiquidityPool {
         initialLiquidityProvidedTime[msg.sender] = block.timestamp;
 
         // SENDS THE TOKENS TO THE LIQUIDITY POOL
-        // IERC20(assetOneAddress).approve(msg.sender, _assetOne);
-        // IERC20(assetTwoAddress).approve(msg.sender, _assetTwo);
-        // IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _assetOne);
-        // IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _assetTwo);
-        IERC20(assetOneAddress).transfer(address(this), _assetOneAmount);
-        IERC20(assetTwoAddress).transfer(address(this), _assetTwoAmount);
+        IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _assetOneAmount);
+        IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _assetTwoAmount);
 
         // SET THE INITIAL LIQUIDITY
         assetOne = _assetOneAmount;
@@ -84,6 +81,7 @@ contract LiquidityPool {
         );
         //give lp tokens to new liquidity provider
         lpTokenQuantity[msg.sender] += (_amount * amountOfOppositeTokenNeeded(_asset, _amount));
+        liquidity += (_amount * amountOfOppositeTokenNeeded(_asset, _amount));
         // NUMBER OF TOKENS GET ADDED
         assetOne += _amount;
         assetTwo += amountOfOppositeTokenNeeded(_asset, _amount);
@@ -98,16 +96,13 @@ contract LiquidityPool {
         uint256 resultAssetOne = (percentageOfUserLiquidity * assetOne) / 100;
         uint256 resultAssetTwo = (percentageOfUserLiquidity * assetTwo) / 100;
         //condition for owner, because of the initial liquidity timer
-        if (msg.sender == owner) {
-            if (isTimeInitialLiquidity() == false) {
-                //the owner has the ability to withdraw liquidity if it wasn't part of initial liquidity
-                if (
-                    (lpTokenQuantity[msg.sender] - (resultAssetOne * resultAssetTwo)) <=
-                    initialLiquidity
-                ) {
-                    revert notEnoughTokens();
-                }
-            }
+        if (
+            (msg.sender == owner) &&
+            (isTimeInitialLiquidity() == false) &&
+            //the owner has the ability to withdraw liquidity if it wasn't part of initial liquidity
+            ((lpTokenQuantity[msg.sender] - (resultAssetOne * resultAssetTwo)) <= initialLiquidity)
+        ) {
+            revert notEnoughTokens();
         }
         //check balance if it is high enough to continue, can't get reverted at transfer, it should have the balance but just in case
         if (
@@ -170,19 +165,32 @@ contract LiquidityPool {
         emit priceChanged(assetTwoAddress, assetTwoPrice());
     }
 
-    // GET THE CURRENT BALANCE OF THE ASSET IN LIQUIDITY POOL
+    // GET THE CURRENT BALANCE OF THE ASSET THE CONTRACT OWNS
     function getAssetBalace(address _address) public view returns (uint256) {
         return IERC20(_address).balanceOf(address(this));
     }
 
-    // GET THE CURRENT PRICE OF THE ASSET
+    // GET THE CURRENT PRICE OF THE ASSET, in output divide with 1 ether (10 ** 18)
     function assetOnePrice() public view returns (uint256) {
         return (assetTwo * 1 ether) / assetOne;
     }
 
-    // GET THE CURRENT PRICE OF THE ASSET
+    // GET THE CURRENT PRICE OF THE ASSET, in output divide with 1 ether (10 ** 18)
     function assetTwoPrice() public view returns (uint256) {
         return (assetOne * 1 ether) / assetTwo;
+    }
+
+    // LETS THE USER SEE HOW MUCH LIQUIDITY THEY OWN, UNABLE TO SEE OTHER'S LP QUANTITY IF USER ISN'T AN OWNER
+    function getLpTokenQuantity(address _address) public view returns (uint256) {
+        if (msg.sender != owner && _address == msg.sender) {
+            revert addressNotCorrect();
+        }
+        return lpTokenQuantity[_address];
+    }
+
+    // GET LIQUIDITY
+    function getLiquidity() public view returns (uint256) {
+        return liquidity;
     }
 
     // GET SWAP QUANTITY BASED ON AMOUNT, INPUT SELLING ASSET, OUTPUT AMOUNT OF SECOND ASSET THAT WOULD GET RETURNED
@@ -263,9 +271,7 @@ contract LiquidityPool {
 
     // INITIAL LIQUIDITY TIME CHECKER, the owner can't withdraw initial liquidity for 365 days
     function isTimeInitialLiquidity() public view returns (bool) {
-        initialLiquidityProvidedTime[msg.sender];
-        uint256 currentStamp = block.timestamp;
-        if ((initialLiquidityProvidedTime[msg.sender] + 365 days) < currentStamp) {
+        if (block.timestamp > (initialLiquidityProvidedTime[msg.sender] + 365 days)) {
             return true;
         } else {
             return false;
