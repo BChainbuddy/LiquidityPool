@@ -10,6 +10,7 @@ error notEnoughGas();
 error notEnoughTimePassed();
 error initialLiquidityAlreadyProvided();
 error addressNotCorrect();
+error amountTooBig();
 
 contract LiquidityPool {
     event priceChanged(address _asset, uint256 price);
@@ -17,10 +18,6 @@ contract LiquidityPool {
     // ADDRESSES OF THE PROVIDED TOKENS
     address assetOneAddress;
     address assetTwoAddress;
-
-    //BALANCEOF THE TOKENS THAT THE CONTRACT HOLDS(THE LIQUIDITY POOL)
-    uint256 public assetOne;
-    uint256 public assetTwo;
 
     //LIQUIDITY AND YIELD(fees)
     uint256 public initialLiquidity;
@@ -49,7 +46,7 @@ contract LiquidityPool {
         uint256 _assetOneAmount,
         uint256 _assetTwoAmount
     ) public onlyOwner {
-        if (initialLiquidityProvidedTime[msg.sender] > 0) {
+        if (initialLiquidityProvidedTime[owner] > 0) {
             revert initialLiquidityAlreadyProvided();
         }
         initialLiquidityProvidedTime[msg.sender] = block.timestamp;
@@ -59,10 +56,8 @@ contract LiquidityPool {
         IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _assetTwoAmount);
 
         // SET THE INITIAL LIQUIDITY
-        assetOne = _assetOneAmount;
-        assetTwo = _assetTwoAmount;
-        initialLiquidity = assetTwo * assetOne;
-        liquidity = assetTwo * assetOne;
+        initialLiquidity = _assetOneAmount * _assetTwoAmount;
+        liquidity = initialLiquidity;
 
         // GIVE LP TOKENS TO THE INITIAL LIQUIDITY PROVIDER
         lpTokenQuantity[msg.sender] = initialLiquidity;
@@ -71,36 +66,31 @@ contract LiquidityPool {
     // ADD ADDITIONAL LIQUIDITY, give first and second token address, give the _amount of first asset you have, the function calculates the other side
     function addLiquidity(address _asset, address _secondAsset, uint256 _amount) public {
         //SET THE RATIO
-        IERC20(_asset).approve(msg.sender, _amount);
-        IERC20(_secondAsset).approve(msg.sender, amountOfOppositeTokenNeeded(_asset, _amount));
-        IERC20(_asset).transferFrom(msg.sender, address(this), _amount);
         IERC20(_secondAsset).transferFrom(
             msg.sender,
             address(this),
             amountOfOppositeTokenNeeded(_asset, _amount)
         );
+        IERC20(_asset).transferFrom(msg.sender, address(this), _amount);
         //give lp tokens to new liquidity provider
         lpTokenQuantity[msg.sender] += (_amount * amountOfOppositeTokenNeeded(_asset, _amount));
         liquidity += (_amount * amountOfOppositeTokenNeeded(_asset, _amount));
-        // NUMBER OF TOKENS GET ADDED
-        assetOne += _amount;
-        assetTwo += amountOfOppositeTokenNeeded(_asset, _amount);
     }
 
     // INSERT THE PERCENTAGE OF LP TOKEN YOU WANT TO WITHDRAW
     // insert 10 for 10%, 50 for 50%, 1 for 1%,...
     function removeLiquidity(uint256 _amount) public {
         uint256 userLpTokens = lpTokenQuantity[msg.sender];
-        uint256 percentageOfLiquidity = (userLpTokens * 100) / liquidity; // How much user owns out of all Liquidity in percentage
+        uint256 percentageOfLiquidity = (userLpTokens * 1 ether) / liquidity; // How much user owns out of all Liquidity in percentage
         uint256 percentageOfUserLiquidity = (percentageOfLiquidity * _amount) / 100; // How much out of their liquidity they want to withdraw in percentage
-        uint256 resultAssetOne = (percentageOfUserLiquidity * assetOne) / 100;
-        uint256 resultAssetTwo = (percentageOfUserLiquidity * assetTwo) / 100;
+        uint256 resultAssetOne = (percentageOfUserLiquidity * getAssetOne()) / 1 ether;
+        uint256 resultAssetTwo = (percentageOfUserLiquidity * getAssetTwo()) / 1 ether;
         //condition for owner, because of the initial liquidity timer
         if (
             (msg.sender == owner) &&
             (isTimeInitialLiquidity() == false) &&
             //the owner has the ability to withdraw liquidity if it wasn't part of initial liquidity
-            ((lpTokenQuantity[msg.sender] - (resultAssetOne * resultAssetTwo)) <= initialLiquidity)
+            ((lpTokenQuantity[msg.sender] - (resultAssetOne * resultAssetTwo)) < initialLiquidity)
         ) {
             revert notEnoughTokens();
         }
@@ -111,30 +101,33 @@ contract LiquidityPool {
         ) {
             revert notEnoughTokens();
         }
-        //avoiding reentrancy attack
-        assetOne -= resultAssetOne;
-        assetTwo -= resultAssetTwo;
         IERC20(assetOneAddress).transfer(msg.sender, resultAssetOne);
         IERC20(assetTwoAddress).transfer(msg.sender, resultAssetTwo);
     }
 
     // GIVE ASSET ONE, GET BACK ASSET TWO
     function sellAssetOne(uint256 _amount) public payable {
+        //IF THE AMOUNT IS TOO BIG
+        if (_amount >= getAssetOne()) {
+            payable(msg.sender).transfer(msg.value);
+            revert amountTooBig();
+        }
         //PAY THE ETH FEE
         uint256 requiredFee = (_amount * swapFee) / 100;
         if (msg.value < requiredFee) {
             revert notEnoughGas();
         }
         yield += requiredFee;
-        uint256 unrequiredFee = msg.value - swapFee;
-        payable(msg.sender).transfer(unrequiredFee);
+        uint256 unrequiredFee = msg.value - requiredFee;
         //CALCULATION
-        uint256 n = assetTwo;
-        assetOne = assetOne + (_amount - _amount);
-        assetTwo = liquidity / assetOne;
+        uint256 n = getAssetTwo();
+        uint256 assetOne = getAssetOne() + _amount;
+        uint256 assetTwo = liquidity / assetOne;
         uint256 result = n - assetTwo;
         //SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
+        IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _amount);
         IERC20(assetTwoAddress).transfer(msg.sender, result);
+        payable(msg.sender).transfer(unrequiredFee);
         //EVENTS
         emit priceChanged(assetOneAddress, assetOnePrice());
         emit priceChanged(assetTwoAddress, assetTwoPrice());
@@ -142,24 +135,27 @@ contract LiquidityPool {
 
     // GIVE ASSET TWO, GET BACK ASSET ONE
     function sellAssetTwo(uint256 _amount) public payable {
+        //IF THE AMOUNT IS TOO BIG
+        if (_amount >= getAssetTwo()) {
+            payable(msg.sender).transfer(msg.value);
+            revert amountTooBig();
+        }
         //PAY THE ETH FEE
         uint256 requiredFee = (_amount * swapFee) / 100;
         if (msg.value < requiredFee) {
             revert notEnoughGas();
         }
         yield += requiredFee;
-        uint256 unrequiredFee = msg.value - swapFee;
-        payable(msg.sender).transfer(unrequiredFee);
-        //GETTING THE ASSET FROM CALLER TO THE LIQUIDITY POOL
-        IERC20(assetTwoAddress).approve(msg.sender, _amount);
-        IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _amount);
+        uint256 unrequiredFee = msg.value - requiredFee;
         //CALCULATION
-        uint256 n = assetOne;
-        assetTwo = assetTwo + (_amount - _amount);
-        assetOne = liquidity / assetTwo;
+        uint256 n = getAssetOne();
+        uint256 assetTwo = getAssetTwo() + _amount;
+        uint256 assetOne = liquidity / assetTwo;
         uint256 result = n - assetOne;
-        //SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
+        //GETTING THE ASSET FROM CALLER TO THE LIQUIDITY POOL AND SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
+        IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _amount);
         IERC20(assetOneAddress).transfer(msg.sender, result);
+        payable(msg.sender).transfer(unrequiredFee);
         //EVENTS
         emit priceChanged(assetOneAddress, assetOnePrice());
         emit priceChanged(assetTwoAddress, assetTwoPrice());
@@ -172,12 +168,22 @@ contract LiquidityPool {
 
     // GET THE CURRENT PRICE OF THE ASSET, in output divide with 1 ether (10 ** 18)
     function assetOnePrice() public view returns (uint256) {
-        return (assetTwo * 1 ether) / assetOne;
+        return (getAssetTwo() * 1 ether) / getAssetOne();
     }
 
     // GET THE CURRENT PRICE OF THE ASSET, in output divide with 1 ether (10 ** 18)
     function assetTwoPrice() public view returns (uint256) {
-        return (assetOne * 1 ether) / assetTwo;
+        return (getAssetOne() * 1 ether) / getAssetTwo();
+    }
+
+    // GET THE AMOUNT OF FIRST TOKEN
+    function getAssetOne() public view returns (uint256) {
+        return IERC20(assetOneAddress).balanceOf(address(this));
+    }
+
+    // GET THE AMOUNT OF SECOND TOKEN
+    function getAssetTwo() public view returns (uint256) {
+        return IERC20(assetTwoAddress).balanceOf(address(this));
     }
 
     // LETS THE USER SEE HOW MUCH LIQUIDITY THEY OWN, UNABLE TO SEE OTHER'S LP QUANTITY IF USER ISN'T AN OWNER
@@ -193,16 +199,21 @@ contract LiquidityPool {
         return liquidity;
     }
 
+    // GET CURRENT SWAP FEE
+    function getSwapFee() public view returns (uint256) {
+        return swapFee;
+    }
+
     // GET SWAP QUANTITY BASED ON AMOUNT, INPUT SELLING ASSET, OUTPUT AMOUNT OF SECOND ASSET THAT WOULD GET RETURNED
     function getSwapQuantity(address sellingAsset, uint256 _amount) public view returns (uint256) {
         if (sellingAsset == assetOneAddress) {
-            uint256 newAssetOne = assetOne + _amount;
+            uint256 newAssetOne = getAssetOne() + _amount;
             uint256 newAssetTwo = liquidity / newAssetOne;
-            return assetTwo - newAssetTwo;
+            return getAssetTwo() - newAssetTwo;
         } else if (sellingAsset == assetTwoAddress) {
-            uint256 newAssetTwo = assetTwo + _amount;
+            uint256 newAssetTwo = getAssetTwo() + _amount;
             uint256 newAssetOne = liquidity / newAssetTwo;
-            return assetOne - newAssetOne;
+            return getAssetOne() - newAssetOne;
         } else {
             revert assetNotCorrect();
         }
@@ -215,18 +226,23 @@ contract LiquidityPool {
     ) public view returns (uint256) {
         uint256 ratio;
         if (_asset == assetOneAddress) {
-            ratio = assetTwo / assetOne;
+            ratio = (getAssetTwo() * 1 ether) / getAssetOne();
         } else {
-            ratio = assetOne / assetTwo;
+            ratio = (getAssetOne() * 1 ether) / getAssetTwo();
         }
-        uint256 amountNeeded = _amount * ratio;
+        uint256 amountNeeded = (_amount * ratio) / 1 ether;
         return amountNeeded;
     }
 
     // GET WEEKLY FEE FOR TRANSACTIONS
     mapping(address => uint256) public yieldTaken;
 
-    // LETS MAKE IT ONCE A DAY
+    // YIELD AMOUNT
+    function yieldAmount() public view returns (uint256) {
+        return yield;
+    }
+
+    // CAN CALL IT ONCE A DAY
     function getYield() public {
         if (isTime() == false) {
             revert notEnoughTimePassed();
@@ -276,5 +292,10 @@ contract LiquidityPool {
         } else {
             return false;
         }
+    }
+
+    //GET ADDRESS BALANCE
+    function addressBalance() public view returns (uint256) {
+        return address(this).balance;
     }
 }
