@@ -49,6 +49,27 @@ contract LiquidityPool {
         swapFee = 1;
     }
 
+    // NOREENTRANCY
+    bool internal locked;
+
+    modifier noReentrancy() {
+        require(!locked, "No re-entrancy");
+        locked = true;
+        _;
+        locked = false;
+    }
+
+    // CHANGE SWAP FEE
+    modifier onlyOwner() {
+        msg.sender == owner;
+        _;
+    }
+
+    // FOR OWNER TO CHANGE THE SWAP FEE IF NEEDED
+    function changeSwapFee(uint256 newSwapFee) public onlyOwner {
+        swapFee = newSwapFee;
+    }
+
     // TRACK THE LP TOKEN QUANTITY, INITIAL LIQUIDITY
     mapping(address => uint256) public lpTokenQuantity;
 
@@ -78,7 +99,11 @@ contract LiquidityPool {
     }
 
     // ADD ADDITIONAL LIQUIDITY, give first and second token address, give the _amount of first asset you have, the function calculates the other side
-    function addLiquidity(address _asset, address _secondAsset, uint256 _amount) public {
+    function addLiquidity(
+        address _asset,
+        address _secondAsset,
+        uint256 _amount
+    ) public noReentrancy {
         // SET THE RATIO, require token balance provided in ERC20, reverted if to low
         IERC20(_secondAsset).transferFrom(
             msg.sender,
@@ -97,7 +122,7 @@ contract LiquidityPool {
 
     // INSERT THE PERCENTAGE OF LP TOKEN YOU WANT TO WITHDRAW
     // insert 10 for 10%, 50 for 50%, 1 for 1%,...
-    function removeLiquidity(uint256 _amount) public {
+    function removeLiquidity(uint256 _amount) public noReentrancy {
         uint256 userLpTokens = lpTokenQuantity[msg.sender];
         uint256 percentageOfLiquidity = (userLpTokens * 1 ether) / liquidity; // How much user owns out of all Liquidity in percentage
         uint256 percentageOfUserLiquidity = (percentageOfLiquidity * _amount) / 100; // How much out of their liquidity they want to withdraw in percentage
@@ -127,7 +152,7 @@ contract LiquidityPool {
     }
 
     // GIVE ASSET ONE, GET BACK ASSET TWO
-    function sellAssetOne(uint256 _amount) public payable {
+    function sellAssetOne(uint256 _amount) public payable noReentrancy {
         //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetOne()) {
             payable(msg.sender).transfer(msg.value);
@@ -155,7 +180,7 @@ contract LiquidityPool {
     }
 
     // GIVE ASSET TWO, GET BACK ASSET ONE
-    function sellAssetTwo(uint256 _amount) public payable {
+    function sellAssetTwo(uint256 _amount) public payable noReentrancy {
         //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetTwo()) {
             payable(msg.sender).transfer(msg.value);
@@ -225,6 +250,11 @@ contract LiquidityPool {
         return swapFee;
     }
 
+    //GET ADDRESS BALANCE
+    function addressBalance() public view returns (uint256) {
+        return address(this).balance;
+    }
+
     // GET SWAP QUANTITY BASED ON AMOUNT, INPUT SELLING ASSET, OUTPUT AMOUNT OF SECOND ASSET THAT WOULD GET RETURNED
     function getSwapQuantity(address sellingAsset, uint256 _amount) public view returns (uint256) {
         if (sellingAsset == assetOneAddress) {
@@ -255,6 +285,9 @@ contract LiquidityPool {
         return amountNeeded;
     }
 
+    /////////////////////////////////////////////////////////////////
+    //YIELD PART AND TIME LOCKS
+
     // GET WEEKLY FEE FOR TRANSACTIONS
     mapping(address => uint256) public yieldTaken;
 
@@ -268,6 +301,7 @@ contract LiquidityPool {
         if (isTime() == false) {
             revert notEnoughTimePassed();
         }
+        lastYieldFarmedTime[msg.sender] = block.timestamp; // Reentrancy guard
         uint256 yieldSoFar = yieldTaken[msg.sender];
         uint256 userLiquidity = (lpTokenQuantity[msg.sender] * 100) / liquidity;
         uint256 availableYield = ((yield - ((yieldSoFar * 100) / userLiquidity)) * userLiquidity) /
@@ -275,23 +309,11 @@ contract LiquidityPool {
         if (availableYield > address(this).balance) {
             revert notEnoughTokens(); // IN CASE THERE IS A LOT OF PEOPLE GETTING YIELD AT ONCE AND RATIOS GET CHANGED TOO MUCH
         }
-        lastYieldFarmedTime[msg.sender] = block.timestamp;
         yieldTaken[msg.sender] += availableYield;
         payable(msg.sender).transfer(availableYield);
 
         // EMIT EVENT
         emit yieldFarmed(msg.sender, availableYield);
-    }
-
-    // CHANGE SWAP FEE
-    modifier onlyOwner() {
-        msg.sender == owner;
-        _;
-    }
-
-    // FOR OWNER TO CHANGE THE SWAP FEE IF NEEDED
-    function changeSwapFee(uint256 newSwapFee) public onlyOwner {
-        swapFee = newSwapFee;
     }
 
     // TIMESTAMP MAPPING
@@ -316,10 +338,5 @@ contract LiquidityPool {
         } else {
             return false;
         }
-    }
-
-    //GET ADDRESS BALANCE
-    function addressBalance() public view returns (uint256) {
-        return address(this).balance;
     }
 }
