@@ -1,6 +1,58 @@
 # Liquidity Pool
 
-This is a liquidity pool made by me. It has a lot of functionalities. The owner can set whatever tokens they want to include in the pool. The users can then exchange tokens in the liquidity pool. The users also get permission to add liquidity tokens. The tokens represent how much of a liquidity pool a certain user owns. The yield is then distributed to the liquidity providers, and they can withdraw tokens daily. The owner needs to lock the initial liquidity for 365 days so the liquidity pool stays secure for one year.
+Welcome to the Liquidity Pool project, a decentralized liquidity pool designed to facilitate token exchange, liquidity provision, and yield farming. This project brings together key functionalities that empower both the owner and users to participate in a robust decentralized financial ecosystem.
+
+## Core Concepts
+
+### 1. Liquidity Provision
+
+Liquidity providers can add tokens to the pool, earning LP (Liquidity Provider) tokens in return. These tokens represent the share of the liquidity pool that a user owns. The more tokens provided, the larger the share.
+
+### 2. Token Exchange
+
+Users can swap tokens within the liquidity pool, taking advantage of the automated market maker (AMM) mechanism. The exchange rates are determined by the current balances of the two tokens in the pool, allowing for seamless and decentralized token swaps.
+
+### 3. Yield Farming
+
+Liquidity providers are rewarded with yield, distributed periodically. Users can claim their yield daily, adding an additional incentive for providing liquidity to the pool.
+
+### 4. Initial Liquidity Lock
+
+To ensure the security and stability of the liquidity pool, the owner is required to lock the initial liquidity for 365 days. This time lock mechanism provides confidence to users and stakeholders, knowing that the liquidity pool is secured for an extended period.
+
+## Core Functions
+
+### 1. Add Initial Liquidity
+
+The owner can add initial liquidity to the pool by providing a specified amount of both assets.
+
+### 2. Add Additional Liquidity
+
+Users can add more liquidity to the pool by providing one asset, and the contract calculates the required amount of the second asset based on the current ratio.
+
+### 3. Remove Liquidity
+
+Users can withdraw a percentage of their liquidity, receiving back the proportional amounts of both assets.
+
+### 4. Sell Asset One
+
+Users can sell the first asset and receive the second asset in return, with a swap fee applied.
+
+### 5. Sell Asset Two
+
+Users can sell the second asset and receive the first asset in return, with a swap fee applied.
+
+### 6. Change Swap Fee
+
+The owner can change the swap fee percentage.
+
+### 7. Claim Yield
+
+Users can claim their daily yield, subject to a time lock. Yield can be claimed once a day.
+
+### 8. Time Lock Functionality
+
+The Liquidity Pool includes time-lock functionality to secure the initial liquidity for 365 days. Certain operations, such as withdrawing initial liquidity, are restricted until the time lock expires.
 
 ## Technologies Used
 

@@ -12,7 +12,12 @@ error initialLiquidityAlreadyProvided();
 error addressNotCorrect();
 error amountTooBig();
 
+/**
+ * @title LiquidityPool
+ * @dev A decentralized liquidity pool contract for swapping assets and providing liquidity.
+ */
 contract LiquidityPool {
+    // Events
     event priceChanged(address _asset, uint256 price);
     event liquidityAdded(
         address indexed _address,
@@ -26,32 +31,23 @@ contract LiquidityPool {
     );
     event yieldFarmed(address indexed _address, uint256 _amount);
 
-    // ADDRESSES OF THE PROVIDED TOKENS
+    // Token Addresses
     address assetOneAddress;
     address assetTwoAddress;
 
-    //LIQUIDITY AND YIELD(fees)
+    // Liquidity and Yield (fees)
     uint256 public initialLiquidity;
     uint256 public liquidity;
     uint256 public yield;
     uint256 public swapFee;
     address public owner;
 
-    constructor(address _assetOneAddress, address _assetTwoAddress) {
-        // STORE THE ADDRESSES
-        assetOneAddress = _assetOneAddress;
-        assetTwoAddress = _assetTwoAddress;
-
-        // SET THE OWNER
-        owner = msg.sender;
-
-        // SET INITIAL SWAP FEE IN PERCENT
-        swapFee = 1;
-    }
-
-    // NOREENTRANCY
+    // Reentrancy Guard
     bool internal locked;
 
+    /**
+     * @dev Modifier to prevent reentrancy attacks.
+     */
     modifier noReentrancy() {
         require(!locked, "No re-entrancy");
         locked = true;
@@ -59,13 +55,30 @@ contract LiquidityPool {
         locked = false;
     }
 
-    // CHANGE SWAP FEE
+    /**
+     * @dev Modifier to restrict functions only to the owner.
+     */
     modifier onlyOwner() {
         msg.sender == owner;
         _;
     }
 
-    // FOR OWNER TO CHANGE THE SWAP FEE IF NEEDED
+    /**
+     * @dev Constructor to initialize the liquidity pool with two asset addresses.
+     * @param _assetOneAddress The address of the first asset.
+     * @param _assetTwoAddress The address of the second asset.
+     */
+    constructor(address _assetOneAddress, address _assetTwoAddress) {
+        assetOneAddress = _assetOneAddress;
+        assetTwoAddress = _assetTwoAddress;
+        owner = msg.sender;
+        swapFee = 1;
+    }
+
+    /**
+     * @dev Function to change the swap fee. Only callable by the owner.
+     * @param newSwapFee The new swap fee to set.
+     */
     function changeSwapFee(uint256 newSwapFee) public onlyOwner {
         swapFee = newSwapFee;
     }
@@ -73,7 +86,12 @@ contract LiquidityPool {
     // TRACK THE LP TOKEN QUANTITY, INITIAL LIQUIDITY
     mapping(address => uint256) public lpTokenQuantity;
 
-    // ADD INITIAL LIQUIDITY, needs erc20 approval
+    /**
+     * @dev Function to add initial liquidity to the pool. Only callable by the owner.
+     * @dev Needs the ERC-20 approval for transferFrom.
+     * @param _assetOneAmount The amount of the first asset to add.
+     * @param _assetTwoAmount The amount of the second asset to add.
+     */
     function addInitialLiquidity(
         uint256 _assetOneAmount,
         uint256 _assetTwoAmount
@@ -98,13 +116,19 @@ contract LiquidityPool {
         emit liquidityAdded(msg.sender, _assetOneAmount, _assetTwoAmount);
     }
 
-    // ADD ADDITIONAL LIQUIDITY, give first and second token address, give the _amount of first asset you have, the function calculates the other side
+    /**
+     * @dev Function to add additional liquidity to the pool.
+     * @dev Needs the ERC-20 approval for transferFrom.
+     * @param _asset The address of the first asset.
+     * @param _secondAsset The address of the second asset.
+     * @param _amount The amount of the first asset to add.
+     */
     function addLiquidity(
         address _asset,
         address _secondAsset,
         uint256 _amount
     ) public noReentrancy {
-        // SET THE RATIO, require token balance provided in ERC20, reverted if to low
+        // SET THE RATIO, require token balance provided in ERC20, reverted if too low
         IERC20(_secondAsset).transferFrom(
             msg.sender,
             address(this),
@@ -120,8 +144,10 @@ contract LiquidityPool {
         emit liquidityAdded(msg.sender, amountOfOppositeTokenNeeded(_asset, _amount), _amount);
     }
 
-    // INSERT THE PERCENTAGE OF LP TOKEN YOU WANT TO WITHDRAW
-    // insert 10 for 10%, 50 for 50%, 1 for 1%,...
+    /**
+     * @dev Function to remove liquidity from the pool.
+     * @param _amount The percentage of liquidity to withdraw(10 -> 10%).
+     */
     function removeLiquidity(uint256 _amount) public noReentrancy {
         uint256 userLpTokens = lpTokenQuantity[msg.sender];
         uint256 percentageOfLiquidity = (userLpTokens * 1 ether) / liquidity; // How much user owns out of all Liquidity in percentage
@@ -151,7 +177,10 @@ contract LiquidityPool {
         emit liquidityRemoved(msg.sender, resultAssetOne, resultAssetTwo);
     }
 
-    // GIVE ASSET ONE, GET BACK ASSET TWO
+    /**
+     * @dev Function to sell the first asset and receive the second asset.
+     * @param _amount The amount of the first asset to sell.
+     */
     function sellAssetOne(uint256 _amount) public payable noReentrancy {
         //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetOne()) {
@@ -179,7 +208,10 @@ contract LiquidityPool {
         emit priceChanged(assetTwoAddress, assetTwoPrice());
     }
 
-    // GIVE ASSET TWO, GET BACK ASSET ONE
+    /**
+     * @dev Function to sell the second asset and receive the first asset.
+     * @param _amount The amount of the second asset to sell.
+     */
     function sellAssetTwo(uint256 _amount) public payable noReentrancy {
         //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetTwo()) {
@@ -207,32 +239,52 @@ contract LiquidityPool {
         emit priceChanged(assetTwoAddress, assetTwoPrice());
     }
 
-    // GET THE CURRENT BALANCE OF THE ASSET THE CONTRACT OWNS
+    /**
+     * @dev Function to get the current balance of a given asset held by the contract.
+     * @param _address The address of the asset.
+     * @return The current balance of the asset.
+     */
     function getAssetBalace(address _address) public view returns (uint256) {
         return IERC20(_address).balanceOf(address(this));
     }
 
-    // GET THE CURRENT PRICE OF THE ASSET, in output divide with 1 ether (10 ** 18)
+    /**
+     * @dev Function to get the current price of the first asset in terms of the second asset.
+     * @return The current price of the first asset * 10**18.
+     */
     function assetOnePrice() public view returns (uint256) {
         return (getAssetTwo() * 1 ether) / getAssetOne();
     }
 
-    // GET THE CURRENT PRICE OF THE ASSET, in output divide with 1 ether (10 ** 18)
+    /**
+     * @dev Function to get the current price of the second asset in terms of the first asset.
+     * @return The current price of the second asset * 10**18.
+     */
     function assetTwoPrice() public view returns (uint256) {
         return (getAssetOne() * 1 ether) / getAssetTwo();
     }
 
-    // GET THE AMOUNT OF FIRST TOKEN
+    /**
+     * @dev Function to get the amount of the first asset held by the contract.
+     * @return The current balance of the first asset.
+     */
     function getAssetOne() public view returns (uint256) {
         return IERC20(assetOneAddress).balanceOf(address(this));
     }
 
-    // GET THE AMOUNT OF SECOND TOKEN
+    /**
+     * @dev Function to get the amount of the second asset held by the contract.
+     * @return The current balance of the second asset.
+     */
     function getAssetTwo() public view returns (uint256) {
         return IERC20(assetTwoAddress).balanceOf(address(this));
     }
 
-    // LETS THE USER SEE HOW MUCH LIQUIDITY THEY OWN, UNABLE TO SEE OTHER'S LP QUANTITY IF USER ISN'T AN OWNER
+    /**
+     * @dev Function to get the quantity of LP tokens owned by a specific address.
+     * @param _address The address of the LP token holder.
+     * @return The quantity of LP tokens owned by the address.
+     */
     function getLpTokenQuantity(address _address) public view returns (uint256) {
         if (msg.sender != owner && _address == msg.sender) {
             revert addressNotCorrect();
@@ -240,22 +292,36 @@ contract LiquidityPool {
         return lpTokenQuantity[_address];
     }
 
-    // GET LIQUIDITY
+    /**
+     * @dev Function to get the total liquidity in the pool.
+     * @return The total liquidity in the pool.
+     */
     function getLiquidity() public view returns (uint256) {
         return liquidity;
     }
 
-    // GET CURRENT SWAP FEE
+    /**
+     * @dev Function to get the current swap fee percentage.
+     * @return The current swap fee percentage.
+     */
     function getSwapFee() public view returns (uint256) {
         return swapFee;
     }
 
-    //GET ADDRESS BALANCE
+    /**
+     * @dev Function to get the current ETH balance of the contract.
+     * @return The current ETH balance of the contract.
+     */
     function addressBalance() public view returns (uint256) {
         return address(this).balance;
     }
 
-    // GET SWAP QUANTITY BASED ON AMOUNT, INPUT SELLING ASSET, OUTPUT AMOUNT OF SECOND ASSET THAT WOULD GET RETURNED
+    /**
+     * @dev Function to get the quantity of the second asset that would be returned for a given amount of the first asset.
+     * @param sellingAsset The address of the asset being sold.
+     * @param _amount The amount of the first asset being sold.
+     * @return The quantity of the second asset that would be returned
+     */
     function getSwapQuantity(address sellingAsset, uint256 _amount) public view returns (uint256) {
         if (sellingAsset == assetOneAddress) {
             uint256 newAssetOne = getAssetOne() + _amount;
@@ -270,7 +336,12 @@ contract LiquidityPool {
         }
     }
 
-    // GET THE SECOND PART OF LIQUIDTY TOKEN PAIR NEEDED FOR PROVIDING LIQUIDITY(We input one side, to get the other side)
+    /**
+     * @dev Function to get the second part of the liquidity token pair needed for providing liquidity.
+     * @param _asset The address of the asset.
+     * @param _amount The amount of the asset.
+     * @return The quantity of the second asset needed for providing liquidity.
+     */
     function amountOfOppositeTokenNeeded(
         address _asset,
         uint256 _amount
@@ -286,17 +357,22 @@ contract LiquidityPool {
     }
 
     /////////////////////////////////////////////////////////////////
-    //YIELD PART AND TIME LOCKS
+    // Yield Farming and Time Locks
 
-    // GET WEEKLY FEE FOR TRANSACTIONS
+    // Daily yield tracking
     mapping(address => uint256) public yieldTaken;
 
-    // YIELD AMOUNT
+    /**
+     * @dev Function to get the current yield amount available in the pool.
+     * @return The current yield amount.
+     */
     function yieldAmount() public view returns (uint256) {
         return yield;
     }
 
-    // CAN CALL IT ONCE A DAY
+    /**
+     * @dev Function to allow users to claim their yield. Can be called once a day.
+     */
     function getYield() public {
         if (isTime() == false) {
             revert notEnoughTimePassed();
@@ -316,11 +392,14 @@ contract LiquidityPool {
         emit yieldFarmed(msg.sender, availableYield);
     }
 
-    // TIMESTAMP MAPPING
+    // Timestamp mapping for yield farming
     mapping(address => uint256) public lastYieldFarmedTime;
     mapping(address => uint256) public initialLiquidityProvidedTime;
 
-    // DAILY TIME CHECKER
+    /**
+     * @dev Function to check if enough time has passed for the user to claim yield.
+     * @return Whether enough time has passed or not.
+     */
     function isTime() public view returns (bool) {
         lastYieldFarmedTime[msg.sender];
         uint256 currentStamp = block.timestamp;
@@ -331,7 +410,10 @@ contract LiquidityPool {
         }
     }
 
-    // INITIAL LIQUIDITY TIME CHECKER, the owner can't withdraw initial liquidity for 365 days
+    /**
+     * @dev Function to check if enough time has passed since the initial liquidity was provided.
+     * @return Whether enough time has passed or not.
+     */
     function isTimeInitialLiquidity() public view returns (bool) {
         if (block.timestamp > (initialLiquidityProvidedTime[msg.sender] + 365 days)) {
             return true;
