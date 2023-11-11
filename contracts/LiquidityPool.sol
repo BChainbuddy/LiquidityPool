@@ -14,6 +14,17 @@ error amountTooBig();
 
 contract LiquidityPool {
     event priceChanged(address _asset, uint256 price);
+    event liquidityAdded(
+        address indexed _address,
+        uint256 _assetOneAmount,
+        uint256 _assetTwoAmount
+    );
+    event liquidityRemoved(
+        address indexed _address,
+        uint256 _assetOneAmount,
+        uint256 _assetTwoAmount
+    );
+    event yieldFarmed(address indexed _address, uint256 _amount);
 
     // ADDRESSES OF THE PROVIDED TOKENS
     address assetOneAddress;
@@ -61,20 +72,27 @@ contract LiquidityPool {
 
         // GIVE LP TOKENS TO THE INITIAL LIQUIDITY PROVIDER
         lpTokenQuantity[msg.sender] = initialLiquidity;
+
+        // EMIT EVENT
+        emit liquidityAdded(msg.sender, _assetOneAmount, _assetTwoAmount);
     }
 
     // ADD ADDITIONAL LIQUIDITY, give first and second token address, give the _amount of first asset you have, the function calculates the other side
     function addLiquidity(address _asset, address _secondAsset, uint256 _amount) public {
-        //SET THE RATIO
+        // SET THE RATIO, require token balance provided in ERC20, reverted if to low
         IERC20(_secondAsset).transferFrom(
             msg.sender,
             address(this),
             amountOfOppositeTokenNeeded(_asset, _amount)
         );
         IERC20(_asset).transferFrom(msg.sender, address(this), _amount);
-        //give lp tokens to new liquidity provider
+
+        // give lp tokens to new liquidity provider
         lpTokenQuantity[msg.sender] += (_amount * amountOfOppositeTokenNeeded(_asset, _amount));
         liquidity += (_amount * amountOfOppositeTokenNeeded(_asset, _amount));
+
+        // EMIT EVENT
+        emit liquidityAdded(msg.sender, amountOfOppositeTokenNeeded(_asset, _amount), _amount);
     }
 
     // INSERT THE PERCENTAGE OF LP TOKEN YOU WANT TO WITHDRAW
@@ -85,7 +103,7 @@ contract LiquidityPool {
         uint256 percentageOfUserLiquidity = (percentageOfLiquidity * _amount) / 100; // How much out of their liquidity they want to withdraw in percentage
         uint256 resultAssetOne = (percentageOfUserLiquidity * getAssetOne()) / 1 ether;
         uint256 resultAssetTwo = (percentageOfUserLiquidity * getAssetTwo()) / 1 ether;
-        //condition for owner, because of the initial liquidity timer
+        // condition for owner, because of the initial liquidity timer
         if (
             (msg.sender == owner) &&
             (isTimeInitialLiquidity() == false) &&
@@ -94,7 +112,7 @@ contract LiquidityPool {
         ) {
             revert notEnoughTokens();
         }
-        //check balance if it is high enough to continue, can't get reverted at transfer, it should have the balance but just in case
+        // check balance if it is high enough to continue, can't get reverted at transfer, it should have the balance but just in case
         if (
             IERC20(assetOneAddress).balanceOf(address(this)) < resultAssetOne ||
             IERC20(assetTwoAddress).balanceOf(address(this)) < resultAssetTwo
@@ -103,11 +121,14 @@ contract LiquidityPool {
         }
         IERC20(assetOneAddress).transfer(msg.sender, resultAssetOne);
         IERC20(assetTwoAddress).transfer(msg.sender, resultAssetTwo);
+
+        // EMIT EVENT
+        emit liquidityRemoved(msg.sender, resultAssetOne, resultAssetTwo);
     }
 
     // GIVE ASSET ONE, GET BACK ASSET TWO
     function sellAssetOne(uint256 _amount) public payable {
-        //IF THE AMOUNT IS TOO BIG
+        //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetOne()) {
             payable(msg.sender).transfer(msg.value);
             revert amountTooBig();
@@ -135,7 +156,7 @@ contract LiquidityPool {
 
     // GIVE ASSET TWO, GET BACK ASSET ONE
     function sellAssetTwo(uint256 _amount) public payable {
-        //IF THE AMOUNT IS TOO BIG
+        //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetTwo()) {
             payable(msg.sender).transfer(msg.value);
             revert amountTooBig();
@@ -252,11 +273,14 @@ contract LiquidityPool {
         uint256 availableYield = ((yield - ((yieldSoFar * 100) / userLiquidity)) * userLiquidity) /
             100;
         if (availableYield > address(this).balance) {
-            revert notEnoughTokens(); // IN CASE THERE IS A LOT OF PEOPLE JOING AT ONCE AND RATIOS GET CHANGED TOO MUCH
+            revert notEnoughTokens(); // IN CASE THERE IS A LOT OF PEOPLE GETTING YIELD AT ONCE AND RATIOS GET CHANGED TOO MUCH
         }
         lastYieldFarmedTime[msg.sender] = block.timestamp;
         yieldTaken[msg.sender] += availableYield;
         payable(msg.sender).transfer(availableYield);
+
+        // EMIT EVENT
+        emit yieldFarmed(msg.sender, availableYield);
     }
 
     // CHANGE SWAP FEE
