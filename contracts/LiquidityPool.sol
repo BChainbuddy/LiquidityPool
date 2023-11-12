@@ -11,6 +11,7 @@ error notEnoughTimePassed();
 error initialLiquidityAlreadyProvided();
 error addressNotCorrect();
 error amountTooBig();
+error needToCallExistingFunction();
 
 /**
  * @title LiquidityPool
@@ -420,5 +421,21 @@ contract LiquidityPool {
         } else {
             return false;
         }
+    }
+
+    /**
+     * @dev Fallback function if address calls unexisting function, but contains msg.data
+     * @notice The transaction gets reverted since the contract doesn't have the infrastructure to process it
+     */
+    fallback() external payable {
+        revert needToCallExistingFunction();
+    }
+
+    /**
+     * @dev Receive function if address calls unexisting function, without msg.data
+     * @notice The transaction gets reverted since the contract doesn't have the infrastructure to process it
+     */
+    receive() external payable {
+        revert needToCallExistingFunction();
     }
 }
