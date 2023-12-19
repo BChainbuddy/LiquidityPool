@@ -33,8 +33,8 @@ contract LiquidityPool {
     event yieldFarmed(address indexed _address, uint256 _amount);
 
     // Token Addresses
-    address assetOneAddress;
-    address assetTwoAddress;
+    address public assetOneAddress;
+    address public assetTwoAddress;
 
     // Liquidity and Yield (fees)
     uint256 public initialLiquidity;

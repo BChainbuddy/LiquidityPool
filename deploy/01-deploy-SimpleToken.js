@@ -19,7 +19,7 @@ module.exports = async () => {
 
     if (process.env.ETHERSCAN_API_KEY && !developmentChains.includes(network.name)) {
         log("Verifying...")
-        await verify(simpleToken.target, args)
+        await verify(simpleToken.address, args)
     }
 }
 
