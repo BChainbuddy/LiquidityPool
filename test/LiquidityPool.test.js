@@ -136,19 +136,13 @@ describe("LiquidityPoolTest", () => {
             // expect(await liquidityPool.yieldAmount()).to.equal(
             //     (ethers.parseEther("100").toString() * swapFee.toString()) / "100"
             // )
-            expect((await liquidityPool.yieldAmount()).toString()).to.equal(
-                (
-                    (ethers.parseEther("100").toString() * ethers.formatUnits(swapFee, 0)) /
-                    "100"
-                ).toString()
-            )
+            expect(swapFee.toString()).to.equal(ethers.parseEther("0.001"))
+            expect((await liquidityPool.yieldAmount()).toString()).to.equal(swapFee)
             await liquidityPool.getYield()
             expect((await liquidityPool.addressBalance()).toString()).to.equal("0")
             // expect((await liquidityPool.yieldAmount()).toString()).to.equal("0")
             await liquidityPool.sellAssetTwo(ethers.parseEther("100"), { value: gas })
-            expect((await liquidityPool.addressBalance()).toString()).to.equal(
-                ethers.parseEther("1")
-            )
+            expect((await liquidityPool.addressBalance()).toString()).to.equal(swapFee)
             await expect(liquidityPool.getYield()).to.be.reverted
             await network.provider.request({
                 method: "evm_increaseTime",

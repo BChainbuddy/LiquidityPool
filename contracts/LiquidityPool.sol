@@ -73,7 +73,7 @@ contract LiquidityPool {
         assetOneAddress = _assetOneAddress;
         assetTwoAddress = _assetTwoAddress;
         owner = msg.sender;
-        swapFee = 1;
+        swapFee = 1000000000000000; // 0.001 ether
     }
 
     /**
@@ -189,12 +189,11 @@ contract LiquidityPool {
             revert amountTooBig();
         }
         //PAY THE ETH FEE
-        uint256 requiredFee = (_amount * swapFee) / 100;
-        if (msg.value < requiredFee) {
+        if (msg.value < swapFee) {
             revert notEnoughGas();
         }
-        yield += requiredFee;
-        uint256 unrequiredFee = msg.value - requiredFee;
+        yield += swapFee;
+        uint256 unrequiredFee = msg.value - swapFee; // In case the msg.sender sent more value than it is required
         //CALCULATION
         uint256 n = getAssetTwo();
         uint256 assetOne = getAssetOne() + _amount;
@@ -203,7 +202,7 @@ contract LiquidityPool {
         //SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
         IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _amount);
         IERC20(assetTwoAddress).transfer(msg.sender, result);
-        payable(msg.sender).transfer(unrequiredFee);
+        payable(msg.sender).transfer(unrequiredFee); // Sending back the unrequired fee
         //EVENTS
         emit priceChanged(assetOneAddress, assetOnePrice());
         emit priceChanged(assetTwoAddress, assetTwoPrice());
@@ -216,16 +215,15 @@ contract LiquidityPool {
     function sellAssetTwo(uint256 _amount) public payable noReentrancy {
         //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
         if (_amount >= getAssetTwo()) {
-            payable(msg.sender).transfer(msg.value);
+            payable(msg.sender).transfer(msg.value); // Transfer value back
             revert amountTooBig();
         }
         //PAY THE ETH FEE
-        uint256 requiredFee = (_amount * swapFee) / 100;
-        if (msg.value < requiredFee) {
+        if (msg.value < swapFee) {
             revert notEnoughGas();
         }
-        yield += requiredFee;
-        uint256 unrequiredFee = msg.value - requiredFee;
+        yield += swapFee;
+        uint256 unrequiredFee = msg.value - swapFee; // In case the msg.sender sent more value than it is required
         //CALCULATION
         uint256 n = getAssetOne();
         uint256 assetTwo = getAssetTwo() + _amount;
@@ -234,7 +232,7 @@ contract LiquidityPool {
         //GETTING THE ASSET FROM CALLER TO THE LIQUIDITY POOL AND SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
         IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _amount);
         IERC20(assetOneAddress).transfer(msg.sender, result);
-        payable(msg.sender).transfer(unrequiredFee);
+        payable(msg.sender).transfer(unrequiredFee); // Sending back the unrequired fee
         //EVENTS
         emit priceChanged(assetOneAddress, assetOnePrice());
         emit priceChanged(assetTwoAddress, assetTwoPrice());

@@ -3,6 +3,7 @@ const fs = require("fs")
 
 const FRONT_END_ADDRESSES_FILE = "../DEX/src/constants/LiquidityPoolAddress.json"
 const FRONT_END_ABI_FILE = "../DEX/src/constants/LiquidityPoolAbi.json"
+const FRONT_END_ABI_ERC20 = "../DEX/src/constants/ERC20Abi.json"
 
 module.exports = async function () {
     if (process.env.UPDATE_FRONT_END) {
@@ -15,7 +16,9 @@ module.exports = async function () {
 //FUNCTION TO UPDATE ABI JSON FILES IN FRONTEND
 async function updateAbi() {
     const LiquidityPool = await ethers.getContract("LiquidityPool")
+    const simpleToken = await ethers.getContract("SimpleToken")
     fs.writeFileSync(FRONT_END_ABI_FILE, JSON.stringify(LiquidityPool.interface.fragments))
+    fs.writeFileSync(FRONT_END_ABI_ERC20, JSON.stringify(simpleToken.interface.fragments))
 }
 
 //FUNCTION TO UPDATE CONTRACT ADDRESSESS FILES IN FRONTEND
