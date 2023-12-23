@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat")
 
 async function deployInitialLiquidity() {
-    const amount = ethers.parseEther("500")
+    const amount = ethers.parseEther("100")
     console.log("Connecting to the contracts...")
     const liquidityPool = await ethers.getContract("LiquidityPool")
     const sampleToken = await ethers.getContract("SampleToken")
