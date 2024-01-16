@@ -6,7 +6,7 @@ const FRONT_END_ABI_FILE = "../DEX/src/constants/LiquidityPoolAbi.json"
 const FRONT_END_ABI_ERC20 = "../DEX/src/constants/ERC20Abi.json"
 
 module.exports = async function () {
-    if (process.env.UPDATE_FRONT_END) {
+    if (process.env.UPDATE_FRONT_END === true) {
         console.log("Updating front end...")
         await updateContractAddresses()
         await updateAbi()
