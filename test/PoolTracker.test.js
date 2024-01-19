@@ -34,5 +34,12 @@ describe("Pool tracker test", () => {
             expect(await poolContract.assetOneAddress()).to.equal(token1.target)
             expect(await poolContract.assetTwoAddress()).to.equal(token2.target)
         })
+        it("Sets the deployer as the owner of the liquidity pool", async () => {
+            const transaction = await poolTracker.createPool(token1.target, token2.target)
+            const txReceipt = await transaction.wait(1)
+            const poolAddress = txReceipt.logs[0].args.pool
+            const poolContract = await ethers.getContractAt("LiquidityPool", poolAddress)
+            expect(await poolContract.owner()).to.equal(poolTracker.target)
+        })
     })
 })
