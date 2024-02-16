@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/interfaces/IERC20.sol";
 error SwapRouter_tokensCantBeSwapped();
 
 contract SwapRouter {
+
     event swap(
         address userAddress,
         address address1,
@@ -23,9 +24,22 @@ contract SwapRouter {
         poolTracker = PoolTracker(tracker);
     }
 
+    // Reentrancy Guard
+    bool internal locked;
+
+    /**
+     * @dev Modifier to prevent reentrancy attacks.
+     */
+    modifier noReentrancy() {
+        require(!locked, "No re-entrancy");
+        locked = true;
+        _;
+        locked = false;
+    }
+
     // address1 input, address2 output
     // approve amount
-    function swapAsset(address address1, address address2, uint256 inputAmount) public {
+    function swapAsset(address address1, address address2, uint256 inputAmount) public noReentrancy {
         if (poolTracker.exists(address1, address2)) {
             // FUNCTION TO SWAP THE TOKENS if there is a direct pool
             // FIND THE POOL

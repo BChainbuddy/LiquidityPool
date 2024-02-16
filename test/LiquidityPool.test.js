@@ -10,7 +10,7 @@ describe("LiquidityPoolTest", () => {
         //GET THE ACCOUNTS AND SET VARIABLES
         mintAmount = ethers.parseEther("1000")
         deployer = (await getNamedAccounts()).deployer
-        const accounts = ethers.getSigners()
+        const accounts = await ethers.getSigners()
         user = accounts[1]
         await deployments.fixture(["all"])
 

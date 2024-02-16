@@ -23,6 +23,19 @@ contract PoolTracker {
         owner = msg.sender;
     }
 
+    // Reentrancy Guard
+    bool internal locked;
+
+    /**
+     * @dev Modifier to prevent reentrancy attacks.
+     */
+    modifier noReentrancy() {
+        require(!locked, "No re-entrancy");
+        locked = true;
+        _;
+        locked = false;
+    }
+
     // Tracker for created pools, will add to database
     event poolCreated(LiquidityPool pool, address assetOne, address assetTwo);
 
@@ -44,8 +57,8 @@ contract PoolTracker {
         address _assetTwoAddress,
         uint256 amountOne,
         uint256 amountTwo
-    ) external {
-        if (!exists(_assetOneAddress, _assetTwoAddress)) // To prevent duplicate pools
+    ) external noReentrancy {
+        if (exists(_assetOneAddress, _assetTwoAddress)) // To prevent duplicate pools
         {
             revert PoolTracker_pairAlreadyExists();
         }
@@ -113,7 +126,11 @@ contract PoolTracker {
         if (msg.sender != owner) {
             revert PoolTracker_addressNotAllowed();
         }
-        for (uint256 i; i < routingAddresses.length; i++) {
+        if(routingAddresses.length == 0){
+            routingAddresses.push(routingAddress(tokenAddress, priceFeed));
+
+        } else {
+            for (uint256 i = 0; i < routingAddresses.length; i++) {
             if (routingAddresses[i].tokenAddress == tokenAddress) {
                 routingAddresses[i] = routingAddress(tokenAddress, priceFeed); // In case we want to update priceFeed address of existing token
                 break;
@@ -121,6 +138,7 @@ contract PoolTracker {
                 // If it is the last one and isnt the same
                 routingAddresses.push(routingAddress(tokenAddress, priceFeed));
             }
+        }
         }
     }
 
