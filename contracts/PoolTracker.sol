@@ -67,6 +67,12 @@ contract PoolTracker {
         pairToPool[_assetTwoAddress][_assetOneAddress] = poolAddress;
 
         // tokens.push()
+        if(tokenExists(_assetOneAddress) == false){
+            tokens.push(_assetOneAddress);
+        }
+        if(tokenExists(_assetTwoAddress) == false){
+            tokens.push(_assetTwoAddress);
+        }
         // Emit the event
         emit poolCreated(poolAddress, _assetOneAddress, _assetTwoAddress);
     }
@@ -77,6 +83,17 @@ contract PoolTracker {
         for (uint256 i; i < poolPairs[token1].length; i++) {
             if (poolPairs[token1][i] == token2) {
                 exist = true;
+            }
+        }
+        return exist;
+    }
+
+    function tokenExists(address tokenAddress) public view returns (bool) {
+        bool exist;
+        for (uint256 i; i < tokens.length; i++) {
+            if (tokenAddress == tokens[i]) {
+                exist = true;
+                break;
             }
         }
         return exist;
