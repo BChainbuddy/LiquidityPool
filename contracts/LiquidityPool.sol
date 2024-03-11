@@ -183,11 +183,6 @@ contract LiquidityPool {
      * @param _amount The amount of the first asset to sell.
      */
     function sellAssetOne(uint256 _amount) public payable noReentrancy {
-        //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
-        if (_amount >= getAssetOne()) {
-            payable(msg.sender).transfer(msg.value);
-            revert amountTooBig();
-        }
         //PAY THE ETH FEE
         if (msg.value < swapFee) {
             revert notEnoughGas();
@@ -213,11 +208,6 @@ contract LiquidityPool {
      * @param _amount The amount of the second asset to sell.
      */
     function sellAssetTwo(uint256 _amount) public payable noReentrancy {
-        //IF THE AMOUNT IS TOO BIG FOR LIQUIDITY POOL TO RETURN
-        if (_amount >= getAssetTwo()) {
-            payable(msg.sender).transfer(msg.value); // Transfer value back
-            revert amountTooBig();
-        }
         //PAY THE ETH FEE
         if (msg.value < swapFee) {
             revert notEnoughGas();

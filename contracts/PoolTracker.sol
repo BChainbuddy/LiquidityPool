@@ -80,10 +80,10 @@ contract PoolTracker {
         pairToPool[_assetTwoAddress][_assetOneAddress] = poolAddress;
 
         // tokens.push()
-        if(tokenExists(_assetOneAddress) == false){
+        if (tokenExists(_assetOneAddress) == false) {
             tokens.push(_assetOneAddress);
         }
-        if(tokenExists(_assetTwoAddress) == false){
+        if (tokenExists(_assetTwoAddress) == false) {
             tokens.push(_assetTwoAddress);
         }
         // Emit the event
@@ -126,19 +126,18 @@ contract PoolTracker {
         if (msg.sender != owner) {
             revert PoolTracker_addressNotAllowed();
         }
-        if(routingAddresses.length == 0){
+        if (routingAddresses.length == 0) {
             routingAddresses.push(routingAddress(tokenAddress, priceFeed));
-
         } else {
             for (uint256 i = 0; i < routingAddresses.length; i++) {
-            if (routingAddresses[i].tokenAddress == tokenAddress) {
-                routingAddresses[i] = routingAddress(tokenAddress, priceFeed); // In case we want to update priceFeed address of existing token
-                break;
-            } else if (i == routingAddresses.length - 1) {
-                // If it is the last one and isnt the same
-                routingAddresses.push(routingAddress(tokenAddress, priceFeed));
+                if (routingAddresses[i].tokenAddress == tokenAddress) {
+                    routingAddresses[i] = routingAddress(tokenAddress, priceFeed); // In case we want to update priceFeed address of existing token
+                    break;
+                } else if (i == routingAddresses.length - 1) {
+                    // If it is the last one and isnt the same
+                    routingAddresses.push(routingAddress(tokenAddress, priceFeed));
+                }
             }
-        }
         }
     }
 
