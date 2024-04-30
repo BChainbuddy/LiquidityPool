@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.7;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
@@ -182,7 +182,7 @@ contract LiquidityPool {
      * @dev Function to sell the first asset and receive the second asset.
      * @param _amount The amount of the first asset to sell.
      */
-    function sellAssetOne(uint256 _amount) public payable noReentrancy {
+    function sellAssetOne(uint256 _amount) external payable noReentrancy returns (uint256) {
         //PAY THE ETH FEE
         if (msg.value < swapFee) {
             revert notEnoughGas();
@@ -197,17 +197,20 @@ contract LiquidityPool {
         //SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
         IERC20(assetOneAddress).transferFrom(msg.sender, address(this), _amount);
         IERC20(assetTwoAddress).transfer(msg.sender, result);
-        payable(msg.sender).transfer(unrequiredFee); // Sending back the unrequired fee
+        (bool sent, ) = payable(msg.sender).call{value: unrequiredFee}("");
+        require(sent, "Failed to send Ether");
         //EVENTS
         emit priceChanged(assetOneAddress, assetOnePrice());
         emit priceChanged(assetTwoAddress, assetTwoPrice());
+        // Returns the amount of token
+        return result;
     }
 
     /**
      * @dev Function to sell the second asset and receive the first asset.
      * @param _amount The amount of the second asset to sell.
      */
-    function sellAssetTwo(uint256 _amount) public payable noReentrancy {
+    function sellAssetTwo(uint256 _amount) external payable noReentrancy returns (uint256) {
         //PAY THE ETH FEE
         if (msg.value < swapFee) {
             revert notEnoughGas();
@@ -222,10 +225,13 @@ contract LiquidityPool {
         //GETTING THE ASSET FROM CALLER TO THE LIQUIDITY POOL AND SENDING THE OPPOSITE ASSET TO THE CALLER FROM LIQUIDITY POOL
         IERC20(assetTwoAddress).transferFrom(msg.sender, address(this), _amount);
         IERC20(assetOneAddress).transfer(msg.sender, result);
-        payable(msg.sender).transfer(unrequiredFee); // Sending back the unrequired fee
+        (bool sent, ) = payable(msg.sender).call{value: unrequiredFee}("");
+        require(sent, "Failed to send Ether");
         //EVENTS
         emit priceChanged(assetOneAddress, assetOnePrice());
         emit priceChanged(assetTwoAddress, assetTwoPrice());
+        //Returns amount of token
+        return result;
     }
 
     /**

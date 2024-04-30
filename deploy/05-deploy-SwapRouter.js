@@ -6,12 +6,14 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     const { deployer } = await getNamedAccounts()
     const { deploy, log } = deployments
 
-    let args = []
+    const PoolTracker = await ethers.getContract("PoolTracker")
+
+    let args = [PoolTracker.target]
 
     const blockConfirmations = developmentChains.includes(network.name) ? 0 : 6
 
     log("Deploying the contract...")
-    const poolTracker = await deploy("PoolTracker", {
+    const SwapRouter = await deploy("SwapRouter", {
         args: args,
         log: true,
         waitConfirmations: blockConfirmations,
@@ -19,9 +21,9 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     })
     log("The contract has been deployed!")
 
-    if (process.env.ETHERSCAN_API_KEY && !developmentChains.includes(network.name)) {
-        await verify(poolTracker.address, args, "contracts/PoolTracker.sol:PoolTracker")
+    if (!developmentChains.includes(network.name)) {
+        await verify(SwapRouter.address, args, "contracts/SwapRouter.sol:SwapRouter")
     }
 }
 
-module.exports.tags = ["PoolTracker", "all", "dex"]
+module.exports.tags = ["SwapRouter", "all", "dex"]

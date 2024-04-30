@@ -1,30 +1,36 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.9;
 
+// Importing necessary contracts and interfaces
 import "./LiquidityPool.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-// Errors
-error PoolTracker_noTokensDetected();
+// Custom error definitions for specific failure conditions
 error PoolTracker_pairAlreadyExists();
-error PoolTracker_addressNotAllowed();
+error PoolTracker_cantSwapSameToken();
 
-// To do:
-// Timer: if the owner doesnt deploy initial liquidity in one day the
-// liquidity pool gets untracked, is not part of platform anymore
+/**
+ * @title PoolTracker
+ * @dev Manages the creation and tracking of liquidity pools within a decentralized finance ecosystem.
+ * Utilizes Chainlink for accurate price feeds and OpenZeppelin's ERC20 for token interactions.
+ * Implements reentrancy guards to mitigate potential security vulnerabilities in contract interactions.
+ */
 contract PoolTracker {
-    // PoolTracker Owner
-    address owner;
+    // Tracker for created pools, will add to database
+    event poolCreated(LiquidityPool pool, address assetOne, address assetTwo);
 
-    // Constructor, sets the owner
-    constructor() {
-        owner = msg.sender;
-    }
+    // The owner of the PoolTracker contract, set to the deployer.
+    address private owner;
 
     // Reentrancy Guard
     bool internal locked;
+
+    // Constructor: Sets the contract deployer as the owner.
+    constructor() {
+        owner = msg.sender;
+    }
 
     /**
      * @dev Modifier to prevent reentrancy attacks.
@@ -36,8 +42,12 @@ contract PoolTracker {
         locked = false;
     }
 
-    // Tracker for created pools, will add to database
-    event poolCreated(LiquidityPool pool, address assetOne, address assetTwo);
+    modifier onlyOwner() {
+        if (msg.sender != owner) {
+            revert();
+        }
+        _;
+    }
 
     // Mapping of pool Pairs, to store existing ones
     mapping(address => address[]) public poolPairs;
@@ -48,10 +58,23 @@ contract PoolTracker {
     // All the available tokens
     address[] public tokens;
 
-    // Mapping of pool per Owner
-    mapping(address => LiquidityPool[]) public poolOwner;
+    // All pools
+    address[] public pools;
 
-    // Pool creator, approve enough for two transferfroms(one to contract(by msg sender) and one from contract(by contract))
+    /**
+     * @dev Creates a liquidity pool for a given pair of ERC20 tokens. This function handles the initial
+     * transfer of token amounts from the caller, sets up the liquidity pool, and updates internal mappings.
+     * Emits a PoolCreated event upon successful creation.
+     *
+     * Requirements:
+     * - The token pair must not already have an existing pool.
+     * - The caller must have approved the contract to spend the necessary token amounts.
+     *
+     * @param _assetOneAddress The address of the first token in the pair.
+     * @param _assetTwoAddress The address of the second token in the pair.
+     * @param amountOne The amount of the first token to add to the pool.
+     * @param amountTwo The amount of the second token to add to the pool.
+     */
     function createPool(
         address _assetOneAddress,
         address _assetTwoAddress,
@@ -67,19 +90,18 @@ contract PoolTracker {
         IERC20(_assetTwoAddress).transferFrom(msg.sender, address(this), amountTwo);
         // Creation of pool
         LiquidityPool poolAddress = new LiquidityPool(_assetOneAddress, _assetTwoAddress);
+        pools.push(address(poolAddress));
         // Approve
         IERC20(_assetOneAddress).approve(address(poolAddress), amountOne);
         IERC20(_assetTwoAddress).approve(address(poolAddress), amountTwo);
         // Add initial liquidity
         poolAddress.addInitialLiquidity(amountOne, amountTwo);
         // Update mappings
-        poolOwner[msg.sender].push(poolAddress);
         poolPairs[_assetOneAddress].push(_assetTwoAddress);
         poolPairs[_assetTwoAddress].push(_assetOneAddress);
         pairToPool[_assetOneAddress][_assetTwoAddress] = poolAddress;
         pairToPool[_assetTwoAddress][_assetOneAddress] = poolAddress;
 
-        // tokens.push()
         if (tokenExists(_assetOneAddress) == false) {
             tokens.push(_assetOneAddress);
         }
@@ -90,7 +112,13 @@ contract PoolTracker {
         emit poolCreated(poolAddress, _assetOneAddress, _assetTwoAddress);
     }
 
-    // To check if a pool pair exists
+    /**
+     * @dev Checks if a liquidity pool exists for a given pair of tokens.
+     *
+     * @param token1 The address of the first token.
+     * @param token2 The address of the second token.
+     * @return bool Returns true if the pool exists, false otherwise.
+     */
     function exists(address token1, address token2) public view returns (bool) {
         bool exist;
         for (uint256 i; i < poolPairs[token1].length; i++) {
@@ -101,7 +129,13 @@ contract PoolTracker {
         return exist;
     }
 
-    function tokenExists(address tokenAddress) public view returns (bool) {
+    /**
+     * @dev Checks if a token is already tracked by the contract.
+     *
+     * @param tokenAddress The address of the token to check.
+     * @return bool Returns true if the token is tracked, false otherwise.
+     */
+    function tokenExists(address tokenAddress) internal view returns (bool) {
         bool exist;
         for (uint256 i; i < tokens.length; i++) {
             if (tokenAddress == tokens[i]) {
@@ -121,65 +155,65 @@ contract PoolTracker {
     // Array of routing Tokens
     routingAddress[] public routingAddresses;
 
-    //
-    function addRoutingAddress(address tokenAddress, address priceFeed) public {
-        if (msg.sender != owner) {
-            revert PoolTracker_addressNotAllowed();
-        }
+    /**
+     * @dev Allows the contract owner to add or update the routing address for a token.
+     * This is used for token swaps and price feed lookups.
+     *
+     * @param tokenAddress The token for which to set the routing.
+     * @param priceFeed The Chainlink price feed address for the token.
+     */
+    function addRoutingAddress(address tokenAddress, address priceFeed) external onlyOwner {
         if (routingAddresses.length == 0) {
             routingAddresses.push(routingAddress(tokenAddress, priceFeed));
         } else {
             for (uint256 i = 0; i < routingAddresses.length; i++) {
                 if (routingAddresses[i].tokenAddress == tokenAddress) {
-                    routingAddresses[i] = routingAddress(tokenAddress, priceFeed); // In case we want to update priceFeed address of existing token
+                    routingAddresses[i] = routingAddress(tokenAddress, priceFeed);
                     break;
                 } else if (i == routingAddresses.length - 1) {
-                    // If it is the last one and isnt the same
                     routingAddresses.push(routingAddress(tokenAddress, priceFeed));
                 }
             }
         }
     }
 
-    function tokenToRoute(address address1, address address2) public view returns (address) {
-        address[] memory token1pairs = poolPairs[address1];
-        address[] memory token2pairs = poolPairs[address2];
+    /**
+     * @dev Returns all array of all tradable tokens on the platform
+     *
+     * @return array Returns tokens array.
+     */
+    function tokenList() external view returns (address[] memory) {
+        return tokens;
+    }
 
-        address routingToken;
-        int routingTokenLiquidity;
+    /**
+     * @dev Returns length or routingAddresses array
+     *
+     * @return uint256 Returns length.
+     */
+    function getRoutingAddressesLength() external view returns (uint256) {
+        return routingAddresses.length;
+    }
 
-        for (uint256 i; i < token1pairs.length; i++) {
-            for (uint256 a; a < token2pairs.length; a++) {
-                if (token1pairs[i] == token2pairs[a]) {
-                    for (uint256 b; b < routingAddresses.length; b++) {
-                        if (routingAddresses[b].tokenAddress == token1pairs[i]) {
-                            (, int answer, , , ) = AggregatorV3Interface(
-                                routingAddresses[b].priceFeed
-                            ).latestRoundData();
-                            int liquidity;
-                            LiquidityPool pool1 = pairToPool[address1][
-                                routingAddresses[b].tokenAddress
-                            ];
-                            LiquidityPool pool2 = pairToPool[address2][
-                                routingAddresses[b].tokenAddress
-                            ];
-                            uint256 balance1 = IERC20(routingAddresses[b].tokenAddress).balanceOf(
-                                address(pool1)
-                            );
-                            uint256 balance2 = IERC20(routingAddresses[b].tokenAddress).balanceOf(
-                                address(pool2)
-                            );
-                            liquidity = (int(balance1) + int(balance2)) * answer;
-                            if (liquidity > routingTokenLiquidity) {
-                                // Best choice so far if the liquidty is bigger than previous best token
-                                routingToken = routingAddresses[b].tokenAddress;
-                                routingTokenLiquidity = liquidity;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return routingToken;
+    /**
+     * @dev Returns length or poolPairs array
+     *
+     * @return uint256 Returns length.
+     */
+    function getPoolPairsLength(address tokenAddress) external view returns (uint256) {
+        return poolPairs[tokenAddress].length;
+    }
+
+    function getPoolPairs(address tokenAddress) public view returns (address[] memory) {
+        return poolPairs[tokenAddress];
+    }
+
+    /**
+     * @dev Retrieve pool addresses
+     *
+     * @return array Returns pools array
+     */
+    function getPools() public view returns (address[] memory) {
+        return pools;
     }
 }
